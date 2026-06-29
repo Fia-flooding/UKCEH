@@ -92,7 +92,7 @@ def load_event_data(
     return flat_df, values, mask_2d, northings, eastings
     
     # Overall, this loads the rainfall data and converts it from a flat table to a 2D grid through time, and makes a catchment mask to identify which grid cells are inside the catchment and which are outside. 
-    # The function returns the flattened rainfall DataFrame (colnames: pixel_000000, pixel_000001, ...), the 3D rainfall values array (T, n_north, n_east), 
+    # The function returns the flattened rainfall DataFrame (colnames: pixel_000000, pixel_000001, ...), the 3D rainfall values array (T, n_north, n_east, rainfall values), 
     # the 2D catchment mask (mask_2d, containing 1.0 for inside and NaN for outside), and the unique northing and easting coordinates (northings, eastings, as arrays).
 
 
@@ -100,10 +100,10 @@ def load_event_data(
 # It takes in the Axes object, a 2D mask array indicating which pixels are inside the catchment, and the corresponding eastings and northings coordinates. 
 # The function uses the contour method to draw a contour line at the level of 0.5, which effectively outlines the catchment area.
 def draw_catchment_outline(
-    ax: plt.Axes,
-    mask_2d: np.ndarray,
-    eastings: np.ndarray,
-    northings: np.ndarray,
+    ax: plt.Axes, # takes axis argument (shows where to plot the contour)
+    mask_2d: np.ndarray, # takes a numpy array as the 2d mask --> what is a 2d mask?
+    eastings: np.ndarray, # array of eastings
+    northings: np.ndarray, # array of northings
 ) -> None:
     """Draw a black contour around the catchment boundary."""
     inside = np.isfinite(mask_2d).astype(float)
