@@ -279,6 +279,7 @@ def find_events(Q, dvar=7, peak_flow_multiple = 5, time_slice_multiple = 10, end
 
     return events_df
 ##################################################################
+# Designing functions for all these things ^^
 
 def get_catchment_coords(event_dict, nrfa_df):
     """
