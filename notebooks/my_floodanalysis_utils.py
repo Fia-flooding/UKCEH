@@ -278,3 +278,100 @@ def find_events(Q, dvar=7, peak_flow_multiple = 5, time_slice_multiple = 10, end
 
 
     return events_df
+##################################################################
+
+def get_catchment_coords(event_dict, nrfa_df):
+    """
+    Takes a dictionary of event metadata, and the nrfa peak flow dataframe
+    (or another appropriate dataframe with centroid and gauage coordinates)
+
+    Returns a list of the catchment IDs
+    Returns a dataframe with the centroid and gauge coordinates of the catchments
+    """
+
+    # Extracting the IDs
+    catchment_ID_list = []
+    for dict in event_dict:
+        catchment_ID_list.append(dict["catchment_id"])
+    # Making the IDs integers
+    for i, id in enumerate(catchment_ID_list):
+        catchment_ID_list[i] = int(id)
+
+    # Filtering out for the coordinates only:
+    nrfa_coordinates = nrfa_df[['Station', 'Easting', 'Northing', 'CEasting', 'CNorthing']]
+
+    # Checking whether this ID is in this dataset:
+    for id in catchment_ID_list:
+        if id not in nrfa_coordinates['Station'].values:
+            print(f"WARNING:\nCatchment ID {id} is not in the NRFA Peak Flow\n" \
+            "dataset; Search for its coordinates elsewhere, and concatenate these" \
+            "onto the dataframe manually")
+
+    # Filtering the events of these catchment IDs out of the dataset:
+    nrfa_coordinates = nrfa_coordinates[
+        nrfa_coordinates['Station'].isin(catchment_ID_list)
+        ]
+    
+    return catchment_ID_list, nrfa_coordinates
+
+
+################################################################
+# Calculating the ACW rotation for the catchments and maps
+def calc_ACW_rotation(gauge_centroid_coord_df):
+    """
+    Calculates the ACW rotation needed for the centroid to sit over the gauage location
+    Takes a df with the gauge and centroid coordinates 
+    Returns a dataframe with the acw rotation
+    """
+    dx = gauge_centroid_coord_df['Easting'] - gauge_centroid_coord_df['CEasting']
+    dy = gauge_centroid_coord_df['Northing'] - gauge_centroid_coord_df['CNorthing']
+
+    # Calculate bearing from the vertical (= gives the clockwise angle from North)
+    bearing = np.degrees(np.arctan2(dx, dy))
+
+    # Adding these to the dataframe:
+    gauge_centroid_coord_df['ACW_rotation_required'] = bearing + 180
+
+    # Checking that this worked:
+    rot_centroid_x = []
+    rot_centroid_y = []
+
+    rot_gauge_x = []
+    rot_gauge_y = []
+
+    for _, row in gauge_centroid_coord_df.iterrows():
+
+        theta = np.radians(row['ACW_rotation_required'])
+
+        # Vector from centroid to gauge
+        dx = row['Easting'] - row['CEasting']
+        dy = row['Northing'] - row['CNorthing']
+
+        # Rotate vector
+        dx_rot = dx*np.cos(theta) - dy*np.sin(theta)
+        dy_rot = dx*np.sin(theta) + dy*np.cos(theta)
+
+        # Put centroid at origin
+        rot_centroid_x.append(0)
+        rot_centroid_y.append(0)
+
+        rot_gauge_x.append(dx_rot)
+        rot_gauge_y.append(dy_rot)
+
+    print("Maximum horizontal offset:",
+        np.max(np.abs(rot_gauge_x)))
+
+    print("Number of gauges below centroid:",
+        np.sum(np.array(rot_gauge_y) < 0),
+        "out of",
+        len(rot_gauge_y))
+    
+    if np.max(np.abs(rot_gauge_x)) > 1: 
+        print("Maximum horizontal offset is too large: centroid \nand gauge aren't over eachother")
+    
+    if np.sum(np.array(rot_gauge_y) < 0) < len(rot_gauge_y):
+        print("Not all rotation angles are correct")
+
+
+    return gauge_centroid_coord_df
+##################################################################
