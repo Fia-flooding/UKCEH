@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from IPython.display import Image, display
 from matplotlib.colors import LinearSegmentedColormap
+import xarray as xr
 
 # -- Outlines colour map for rainfall fields ------------------------------------------
 def custom_rainfall_cmap() -> LinearSegmentedColormap:
@@ -420,3 +421,12 @@ def load_mask_and_bearings(
     # Overall, this loads a catchment mask to identify which grid cells are inside the catchment and which are outside. 
     # The function returns the 2D catchment mask (mask_2d, containing 1.0 for inside and NaN for outside), and the unique
     # # northing and easting coordinates (northings, eastings, as arrays).
+
+###########################################################################################################
+def load_nc_rainfield (path, id, gauge):
+    """
+    Reads in a rainfall field in NetCDF format.
+    Requires data to be in the path format of ID_gaugename_rainfield.nc
+    """
+    rainfall_field = xr.open_dataset(path / f"{id}_{gauge}_rainfield.nc", engine = "netcdf4")
+    return rainfall_field
