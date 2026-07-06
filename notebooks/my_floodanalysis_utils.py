@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from IPython.display import Image, display
 from matplotlib.colors import LinearSegmentedColormap
+import xarray as xr
 
 # -- Outlines colour map for rainfall fields ------------------------------------------
 def custom_rainfall_cmap() -> LinearSegmentedColormap:
@@ -376,3 +377,56 @@ def calc_ACW_rotation(gauge_centroid_coord_df):
 
     return gauge_centroid_coord_df
 ##################################################################
+
+# -- load the catchment mask and flat rainfall field for one event ------------------------------------------
+def load_mask_and_bearings(
+    event_id: str,
+    data_dir: Path,
+) -> tuple[pd.DataFrame, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Load the catchment mask for one event.
+
+    Returns
+    -------
+    mask      : ndarray, shape (n_northings, n_eastings) – NaN outside catchment
+    northings : 1-D array of unique northing coordinates (metres, OSGB36)
+    eastings  : 1-D array of unique easting coordinates  (metres, OSGB36)
+    """
+    mask_path = data_dir / f'catchment_mask_{event_id}.csv' # Creates the path to the catchment mask CSV file for the given event ID and names this path mask_path
+   
+    mask_df = pd.read_csv(mask_path) # Reads the catchment mask CSV file into a pandas DataFrame called mask_df
+
+    # Derive grid dimensions from the mask file
+    northings = np.sort(mask_df['northing'].unique())[::-1] # Takes the Northing column --> removes duplicates = unique grid coords --> sorts from small to large
+    # this is reversed because imshow plots the first row at the bottom, so it must be reversed to match the coordinate system
+    eastings  = np.sort(mask_df['easting'].unique()) # Takes the Easting column --> removes duplicates = unique grid coords --> sorts from small to large
+    n_north, n_east = len(northings), len(eastings) # Gets the number of unique northing and easting coordinates, which represent the dimensions of the grid
+
+    # Reconstruct 2-D catchment mask (NaN = outside, 1 = inside): this is to identify which grid cells are inside the catchment and which are outside
+    mask_2d = np.full((n_north, n_east), np.nan) # constructs a 2D array of shape (n_north, n_east) filled with NaN values, representing the catchment mask
+
+    # Translate the real world coordinates (northings, eastings) into array indices (r, c) for the mask_2d array
+    north_idx = {v: i for i, v in enumerate(northings)} # Creates a dictionary mapping each unique northing value (v) to its corresponding index (i)in the northings array
+    east_idx  = {v: i for i, v in enumerate(eastings)} # Creates a dictionary mapping each unique easting value (v) to its corresponding index (i) in the eastings array
+
+    # Populate the mask_2d array with 1.0 for points inside the catchment and NaN for points outside the catchment
+    for _, row in mask_df.iterrows(): # For each row in the mask_df DataFrame, which contains the catchment mask data...
+        r = north_idx[row['northing']] # translate the northing coordinate to the coresponding row index in the mask_2d array (e.g. if the northing is the 3rd unique northing value, then r = 2)
+        c = east_idx[row['easting']]  # translate the easting coordinate to the corresponding column index in the mask_2d array (e.g. if the easting is the 5th unique easting value, then c = 4)
+        if pd.notna(row['catchment_mask']): # Check if the catchment_mask value is not NaN (i.e. that this point is inside the catchment)
+            mask_2d[r, c] = 1.0 # add 1.0 to the grid cell in the mask_2d array corresponding to this northing and easting coordinate, indicating that this point is inside the catchment
+
+    return mask_2d, northings, eastings
+    
+    # Overall, this loads a catchment mask to identify which grid cells are inside the catchment and which are outside. 
+    # The function returns the 2D catchment mask (mask_2d, containing 1.0 for inside and NaN for outside), and the unique
+    # # northing and easting coordinates (northings, eastings, as arrays).
+
+###########################################################################################################
+def load_nc_rainfield (path, id, gauge):
+    """
+    Reads in a rainfall field in NetCDF format.
+    Requires data to be in the path format of ID_gaugename_rainfield.nc
+    """
+    rainfall_field = xr.open_dataset(path / f"{id}_{gauge}_rainfield.nc", engine = "netcdf4")
+    return rainfall_field
