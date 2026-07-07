@@ -430,3 +430,139 @@ def load_nc_rainfield (path, id, gauge):
     """
     rainfall_field = xr.open_dataset(path / f"{id}_{gauge}_rainfield.nc", engine = "netcdf4")
     return rainfall_field
+
+
+######################################################################################################################
+def prepro_eof_comp(event_dict, rotated_data_dict,  unrotated_data_dict): #unrotated_data_dict,):
+    """ 
+    Loops through the events dictionary
+    Pre-processes it with Z-scoring
+    Conducts EOf
+    Plots the first 2 PCs
+    """
+    for event in event_dict: # for each event in my event dictionary, make a plot to compare the different pre-processing methods
+
+        station_id = int(event["catchment_id"]) # get the ID for this event
+        rot_data = rotated_data_dict[station_id]["rotated_rainfall_field"] # get the rotated rainfall field data for this event
+        rot_data_ts = (unrotated_data_dict[station_id]["values"].time) # get the timeseries for this event
+        # --------------------------------------------------
+        # Original EOF matrix: no pre-processing
+        # --------------------------------------------------
+
+        rot_data_rshp = (
+            rot_data.reshape(
+                rot_data.shape[0],
+                rot_data.shape[1] * rot_data.shape[2]).T)
+
+        valid_pixels = ~np.all(
+            np.isnan(rot_data_rshp),
+            axis=1)
+
+        rot_data_eof = rot_data_rshp[
+            valid_pixels,:]
+
+        # --------------------------------------------------
+        # Create preprocessing methods
+        # --------------------------------------------------
+
+
+
+        pixel_mean = np.nanmean( # standardising (i.e. z scores)
+            rot_data_eof,
+            axis=1,
+            keepdims=True)
+        pixel_std = np.nanstd(rot_data_eof, axis = 1, keepdims = True)
+        rot_data_z = (rot_data_eof - pixel_mean)/ pixel_std
+
+
+
+        methods = [ # creating a dictionary of the different pre-processing methods
+
+             ("Z-Score Standardising",
+             rot_data_z,
+             valid_pixels)]
+
+        # --------------------------------------------------
+        # Figure: setting up the figure for the event
+        # --------------------------------------------------
+
+        fig, ax = plt.subplots(
+            5,
+            1,
+            figsize=(5, 10),
+            layout="constrained")
+
+        # --------------------------------------------------
+        # Loop over preprocessing methods
+        # --------------------------------------------------
+
+        for col, (
+            method_name,
+            eof_data,
+            valid_pix
+        ) in enumerate(methods):
+            U, D, VT = np.linalg.svd(
+                eof_data,
+                full_matrices=False
+            )
+
+            # ------------------------------------------
+            # Variance explained
+            # ------------------------------------------
+
+            FC = np.cumsum(D**2) / np.sum(D**2)
+
+            ax[0].bar(
+                np.arange(len(D)) + 1,FC)
+
+            ax[0].set_title(
+                method_name)
+
+            ax[0].set_xlim(0.5,10.5)
+
+            ax[0].set_ylim(0,1)
+
+            ax[0].set_xlabel("Mode")
+
+            ax[0].set_ylabel("Cum. variance")
+
+            # ------------------------------------------
+            # PCs
+            # ------------------------------------------
+
+            for mode_idx in range(2):
+
+                PC = -(D[mode_idx]* VT[mode_idx, :])
+
+                ax[mode_idx + 1].plot(rot_data_ts,PC,lw=1)
+
+                ax[mode_idx + 1].set_title(f"PC{mode_idx+1}")
+
+                ax[mode_idx + 1].set_ylabel("Amplitude")
+
+            # ------------------------------------------
+            # Regression EOF maps
+            # ------------------------------------------
+
+            for mode_idx in range(2):
+
+                eof = -(U[:, mode_idx])
+                print(eof_data.shape)
+                eof_full = np.full(rot_data.shape[1]*rot_data.shape[2], np.nan) 
+                eof_full[valid_pix] = eof
+
+                eof_map = eof_full.reshape(rot_data.shape[1], rot_data.shape[2])
+
+                row = mode_idx + 3
+
+                im = ax[row].imshow(eof_map,cmap= 'RdBu')
+
+                ax[row].set_title(f"EOF{mode_idx+1}")
+
+                fig.colorbar(im,ax=ax[row])
+
+        fig.suptitle(
+            f"EOF comparison: {station_id}",
+            fontsize=14)
+
+        plt.show()
