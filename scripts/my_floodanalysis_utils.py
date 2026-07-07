@@ -11,6 +11,7 @@ import pandas as pd
 from IPython.display import Image, display
 from matplotlib.colors import LinearSegmentedColormap
 import xarray as xr
+import statsmodels.api as sm
 
 # -- Outlines colour map for rainfall fields ------------------------------------------
 def custom_rainfall_cmap() -> LinearSegmentedColormap:
