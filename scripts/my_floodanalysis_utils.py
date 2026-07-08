@@ -515,3 +515,171 @@ def prepro_eof_comp(event_dict, rotated_data_dict,  unrotated_data_dict):
             fontsize=14)
 
         plt.show()
+
+###################################################################################################################################################
+
+def load_nc_rainfield_v2 (path, id):
+    """
+    Reads in a rainfall field in NetCDF format.
+    Requires data to be in the path format of ID_masked_rainfall.nc
+    """
+    rainfall_field = xr.open_dataset(path / f"{id}_masked_rainfall.nc", engine = "netcdf4")
+    return rainfall_field
+
+####################################################################################################################################################
+
+# Calculate and plot eof 1, 2 and 3 for the xarray data
+def calc_plot_eof_xr(event_dict, rotated_data_dict,  unrotated_data_dict): 
+    # e.g. rotated_data_dict = all_rotated_data;
+    # e.g. unrotated_data_dict = catchment_rainfall_data
+    eof_scores = {}
+    pc_scores = {}
+
+    for event in event_dict: # for each event in my event dictionary, make a plot to compare the different pre-processing methods
+
+        station_id = int(event["catchment_id"]) # get the ID for this event
+        rot_data = rotated_data_dict[station_id]["rotated_rainfall_field"] # get the rotated rainfall field data for this event
+        rot_data_ts = (unrotated_data_dict[station_id]["values"].time) # get the timeseries for this event
+
+        # Re-shaping the data so it is in the matrix form required for the EOF
+        rot_data_rshp = (rot_data.reshape(rot_data.shape[0],
+                rot_data.shape[1] * rot_data.shape[2]).T)
+
+        valid_pixels = ~np.all(np.isnan(rot_data_rshp), axis=1)
+
+        rot_data_eof = rot_data_rshp[
+            valid_pixels,:]
+        
+        fig, ax = plt.subplot_mosaic([['PC1', 'PC2', 'PC3', 'cumvar'],
+                                      ['EOF1', 'EOF2', 'EOF3', 'cumvar']],
+                                      figsize = (20, 5), layout = "constrained")
+        
+        # Calculating the EOF
+        U, D, VT = np.linalg.svd(rot_data_eof, full_matrices = False)
+
+        # Calculating the variance explained
+        FC = np.cumsum(D**2) / np.sum(D**2)
+        ax['cumvar'].bar(np.arange(len(D)) + 1,FC)
+        ax['cumvar'].set_xlim(0.5,5.5)
+        ax['cumvar'].set_ylim(0,1)
+        ax['cumvar'].set_xlabel("Mode")
+        ax['cumvar'].set_ylabel("Cum. variance")
+
+        # Getting the first three PCs and plotting them
+        PC = D[0]* VT[0, :]
+        ax['PC1'].plot(rot_data_ts,PC,lw=1)
+        ax['PC1'].set_title(f"PC1")
+        ax['PC1'].set_ylabel("Amplitude")
+        pc1 = PC
+
+        PC = D[1]* VT[1, :]
+        ax['PC2'].plot(rot_data_ts,PC,lw=1)
+        ax['PC2'].set_title(f"PC2")
+        ax['PC2'].set_ylabel("Amplitude")
+        pc2 = PC
+
+        PC = D[2]* VT[2, :]
+        ax['PC3'].plot(rot_data_ts,PC,lw=1)
+        ax['PC3'].set_title(f"PC3")
+        ax['PC3'].set_ylabel("Amplitude")
+        pc3 = PC
+
+        pc_scores[station_id]= {
+            'pc1' : pc1,
+            'pc2' : pc2,
+            'pc3' : pc3,
+        }
+
+        # Plotting the EOF colour maps
+        eof = U[:, 0]
+        eof_full = np.full(rot_data.shape[1]*rot_data.shape[2], np.nan) 
+        eof_full[valid_pixels] = eof
+        eof_map = eof_full.reshape(rot_data.shape[1], rot_data.shape[2])
+        abs_min_val = abs(np.min(eof))
+        abs_max_val = abs(np.max(eof))
+        if abs_max_val > abs_min_val:
+            vmin = abs_max_val * -1
+            vmax = abs_max_val
+        elif abs_min_val > abs_max_val:
+            vmin= abs_min_val * -1
+            vmax = abs_min_val
+        im = ax['EOF1'].imshow(eof_map,cmap= 'RdBu_r', vmin = vmin, vmax = vmax)
+        ax['EOF1'].set_title(f"EOF1")
+        fig.colorbar(im,ax=ax['EOF1'])
+
+        eof1_scores = eof_map
+
+        # calculating the time each cell is at 0:        
+        percent_time_zero = np.sum(rot_data == 0, axis=0) / rot_data.shape[0] # percentage of timesteps each pixel is zero
+        percent_flat = percent_time_zero.flatten() # flatten to match EOF preprocessing
+        percent_valid = percent_flat[valid_pixels] # keep only the pixels used in the EOF analysis
+
+        percent_matrix = sm.add_constant(percent_valid)
+        model = sm.OLS(eof, percent_matrix)
+        results = model.fit()
+        eof_fitted = results.fittedvalues
+        r_squared = results.rsquared
+
+        fig, ax_scatter = plt.subplots()
+        ax_scatter.scatter(percent_valid, eof)
+        ax_scatter.set_xlabel('Fraction of timesteps with rainfall = 0')
+        ax_scatter.set_ylabel('EOF1 loading')
+        ax_scatter.plot(percent_valid, eof_fitted, c = 'Red', label = 'Fitted')
+        ax_scatter.text(
+            0.05, 0.95,
+            f'$R^2$ = {r_squared:.3f}',
+            transform=ax_scatter.transAxes,
+            verticalalignment='top',
+            bbox=dict(facecolor='white', alpha=0.8)
+        )
+
+        eof = U[:, 1]
+        eof_full = np.full(rot_data.shape[1]*rot_data.shape[2], np.nan) 
+        eof_full[valid_pixels] = eof
+        eof_map = eof_full.reshape(rot_data.shape[1], rot_data.shape[2])
+        abs_min_val = abs(np.min(eof))
+        abs_max_val = abs(np.max(eof))
+        if abs_max_val > abs_min_val:
+            vmin = abs_max_val * -1
+            vmax = abs_max_val
+        elif abs_min_val > abs_max_val:
+            vmin= abs_min_val * -1
+            vmax = abs_min_val
+        im = ax['EOF2'].imshow(eof_map,cmap= 'RdBu_r', vmin = vmin, vmax = vmax)
+        ax['EOF2'].set_title(f"EOF2")
+        fig.colorbar(im,ax=ax['EOF2'])
+
+        eof2_scores = eof_map        
+
+        eof = U[:, 2]
+        eof_full = np.full(rot_data.shape[1]*rot_data.shape[2], np.nan) 
+        eof_full[valid_pixels] = eof
+        eof_map = eof_full.reshape(rot_data.shape[1], rot_data.shape[2])
+        abs_min_val = abs(np.min(eof))
+        abs_max_val = abs(np.max(eof))
+        if abs_max_val > abs_min_val:
+            vmin = abs_max_val * -1
+            vmax = abs_max_val
+        elif abs_min_val > abs_max_val:
+            vmin= abs_min_val * -1
+            vmax = abs_min_val
+        im = ax['EOF3'].imshow(eof_map,cmap= 'RdBu_r', vmin = vmin , vmax = vmax)
+        ax['EOF3'].set_title(f"EOF3")
+        fig.colorbar(im,ax=ax['EOF3'])
+
+        eof3_scores = eof_map
+
+        fig.suptitle(
+            f"EOF comparison: {station_id}",
+            fontsize=14)
+
+        plt.show()
+
+        eof_scores[station_id] = {
+        'eof1': eof1_scores,
+        'eof2': eof2_scores,
+        'eof3': eof3_scores}
+
+    return eof_scores, pc_scores
+
+#############################################################################################################################
