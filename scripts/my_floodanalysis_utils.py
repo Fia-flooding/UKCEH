@@ -580,19 +580,46 @@ def calc_plot_eof_xr(event_dict, rotated_data_dict,  unrotated_data_dict):
 
         # Getting the first three PCs and plotting them
         PC = D[0]* VT[0, :]
+        abs_min_val = abs(np.min(PC))
+        abs_max_val = abs(np.max(PC))
+        if abs_max_val > abs_min_val:
+            vmin = abs_max_val * -1
+            vmax = abs_max_val
+        elif abs_min_val > abs_max_val:
+            vmin= abs_min_val * -1
+            vmax = abs_min_val
         ax['PC1'].plot(rot_data_ts,PC,lw=1)
+        ax['PC1'].set_ylim(vmin, vmax)
         ax['PC1'].set_title(f"PC1")
         ax['PC1'].set_ylabel("Amplitude")
         pc1 = PC
 
         PC = D[1]* VT[1, :]
+        abs_min_val = abs(np.min(PC))
+        abs_max_val = abs(np.max(PC))
+        if abs_max_val > abs_min_val:
+            vmin = abs_max_val * -1
+            vmax = abs_max_val
+        elif abs_min_val > abs_max_val:
+            vmin= abs_min_val * -1
+            vmax = abs_min_val
         ax['PC2'].plot(rot_data_ts,PC,lw=1)
+        ax['PC2'].set_ylim(vmin, vmax)
         ax['PC2'].set_title(f"PC2")
         ax['PC2'].set_ylabel("Amplitude")
         pc2 = PC
 
         PC = D[2]* VT[2, :]
+        abs_min_val = abs(np.min(PC))
+        abs_max_val = abs(np.max(PC))
+        if abs_max_val > abs_min_val:
+            vmin = abs_max_val * -1
+            vmax = abs_max_val
+        elif abs_min_val > abs_max_val:
+            vmin= abs_min_val * -1
+            vmax = abs_min_val
         ax['PC3'].plot(rot_data_ts,PC,lw=1)
+        ax['PC3'].set_ylim(vmin, vmax)
         ax['PC3'].set_title(f"PC3")
         ax['PC3'].set_ylabel("Amplitude")
         pc3 = PC
