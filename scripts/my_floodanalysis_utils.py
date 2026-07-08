@@ -517,15 +517,28 @@ def prepro_eof_comp(event_dict, rotated_data_dict,  unrotated_data_dict):
         plt.show()
 
 ###################################################################################################################################################
-
-def load_nc_rainfield_v2 (path, id):
+def load_nc_rainfield_v2(path, catchment_id):
     """
-    Reads in a rainfall field in NetCDF format.
-    Requires data to be in the path format of ID_masked_rainfall.nc
-    """
-    rainfall_field = xr.open_dataset(path / f"{id}_masked_rainfall.nc", engine = "netcdf4")
-    return rainfall_field
+    Load rainfall field NetCDF.
 
+    Priority:
+    1. <ID>_masked_rainfall_filtered.nc
+    2. <ID>_masked_rainfall.nc
+    """
+
+    filtered_file = path / f"{catchment_id}_masked_rainfall_filtered.nc"
+    unfiltered_file = path / f"{catchment_id}_masked_rainfall.nc"
+
+    if filtered_file.exists():
+        return xr.open_dataset(filtered_file, engine="netcdf4")
+
+    elif unfiltered_file.exists():
+        return xr.open_dataset(unfiltered_file, engine="netcdf4")
+
+    else:
+        raise FileNotFoundError(
+            f"No rainfall file found for catchment {catchment_id}"
+        )
 ####################################################################################################################################################
 
 # Calculate and plot eof 1, 2 and 3 for the xarray data
